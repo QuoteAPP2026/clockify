@@ -21,19 +21,31 @@ export async function onRequestGet({ request, env }) {
     if (!auth.ok) return json({ ok:false, error:auth.error }, auth.status);
 
     const url = new URL(request.url);
-    let start = url.searchParams.get("start"); // accepts YYYY-MM-DD or DD/MM/YYYY
+    let start = url.searchParams.get("start"); // accepts multiple formats
     if (!start) {
       return json({ ok:false, error:"Missing start date" }, 400);
     }
+    start = String(start).trim();
 
-    // Convert DD/MM/YYYY -> YYYY-MM-DD if needed
-    if (/^\d{2}\/\d{2}\/\d{4}$/.test(start)) {
-      const [dd, mm, yyyy] = start.split("/");
+    // Normalise common formats into YYYY-MM-DD
+    // Accept: YYYY-MM-DD, YYYY/MM/DD, DD/MM/YYYY, D/M/YYYY, DD-MM-YYYY, D-M-YYYY
+    const m1 = start.match(/^(\d{4})[-\/](\d{1,2})[-\/](\d{1,2})$/);
+    const m2 = start.match(/^(\d{1,2})[-\/](\d{1,2})[-\/](\d{4})$/);
+
+    if (m1) {
+      const yyyy = m1[1];
+      const mm = m1[2].padStart(2, "0");
+      const dd = m1[3].padStart(2, "0");
+      start = `${yyyy}-${mm}-${dd}`;
+    } else if (m2) {
+      const dd = m2[1].padStart(2, "0");
+      const mm = m2[2].padStart(2, "0");
+      const yyyy = m2[3];
       start = `${yyyy}-${mm}-${dd}`;
     }
 
     if (!/^\d{4}-\d{2}-\d{2}$/.test(start)) {
-      return json({ ok:false, error:"Invalid start date format (use YYYY-MM-DD or DD/MM/YYYY)" }, 400);
+      return json({ ok:false, error:"Invalid start date format" }, 400);
     }
 
     // Window: start 00:00:00 -> +7 days
