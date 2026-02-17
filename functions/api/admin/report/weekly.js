@@ -31,6 +31,7 @@ export async function onRequestGet({ request, env }) {
     // Accept: YYYY-MM-DD, YYYY/MM/DD, DD/MM/YYYY, D/M/YYYY, DD-MM-YYYY, D-M-YYYY
     const m1 = start.match(/^(\d{4})[-\/](\d{1,2})[-\/](\d{1,2})$/);
     const m2 = start.match(/^(\d{1,2})[-\/](\d{1,2})[-\/](\d{4})$/);
+    const m3 = start.match(/^(\d{1,2})[-\/](\d{1,2})[-\/](\d{2})$/);   // DD/MM/YY
 
     if (m1) {
       const yyyy = m1[1];
@@ -42,10 +43,20 @@ export async function onRequestGet({ request, env }) {
       const mm = m2[2].padStart(2, "0");
       const yyyy = m2[3];
       start = `${yyyy}-${mm}-${dd}`;
+    } else if (m3) {
+      const dd = m3[1].padStart(2, "0");
+      const mm = m3[2].padStart(2, "0");
+      const yy = m3[3];
+      const yyyy = (Number(yy) >= 70) ? `19${yy}` : `20${yy}`; // 70–99 => 1970–1999, else 2000–2069
+      start = `${yyyy}-${mm}-${dd}`;
+      const dd = m2[1].padStart(2, "0");
+      const mm = m2[2].padStart(2, "0");
+      const yyyy = m2[3];
+      start = `${yyyy}-${mm}-${dd}`;
     }
 
     if (!/^\d{4}-\d{2}-\d{2}$/.test(start)) {
-      return json({ ok:false, error:"Invalid start date format" }, 400);
+      return json({ ok:false, error:"Invalid start date format", received:start }, 400);
     }
 
     // Window: start 00:00:00 -> +7 days
