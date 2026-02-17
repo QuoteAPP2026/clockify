@@ -11,15 +11,18 @@ function getCookie(request, name) {
   return match ? decodeURIComponent(match[2]) : null;
 }
 
-export async function onRequestPost(context) {
+export async function onRequest(context) {
   const { request, env } = context;
+
+  if (request.method !== "POST") {
+    return new Response(null, { status: 405 });
+  }
 
   const token = getCookie(request, "admin_session");
   if (token) {
     await env.DB.prepare("DELETE FROM admin_sessions WHERE token = ?").bind(token).run();
   }
 
-  // Expire cookie
   const cookie = "admin_session=; Path=/; HttpOnly; Secure; SameSite=Strict; Max-Age=0";
   return json({ ok: true }, 200, { "Set-Cookie": cookie });
 }
