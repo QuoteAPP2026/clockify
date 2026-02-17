@@ -1,68 +1,84 @@
 import { requireAdmin } from "../../../_lib/admin.js";
 
+async function getCols(db, table) {
+  const r = await db.prepare(`PRAGMA table_info(${table});`).all();
+  const set = new Set();
+  for (const row of (r.results || [])) if (row?.name) set.add(String(row.name));
+  return set;
+}
+
+function pick(cols, obj) {
+  const out = {};
+  for (const [k,v] of Object.entries(obj)) if (cols.has(k) && v !== undefined) out[k] = v;
+  return out;
+}
+
 export async function onRequestPost(ctx) {
-  const { request, env } = ctx;
-
-  const auth = await requireAdmin(request, env);
-  if (auth instanceof Response) return auth;
-
-  let body = null;
-  try { body = await request.json(); } catch (_) {}
-
-  const name = (body?.name || "").trim();
-  const pinRaw = (body?.pin || "").toString().trim();
-  const shop_id = body?.shop_id || body?.shop || body?.shopId; // tolerate variants
-
-  if (!name || !pinRaw || !shop_id) {
-    return new Response(JSON.stringify({ ok: false, error: "Missing name, pin, or shop_id" }), {
-      status: 400,
-      headers: { "content-type": "application/json; charset=utf-8" },
-    });
-  }
-
-  // Keep PIN as string (preserves leading zeros). Basic validation.
-  if (!/^[0-9]{3,8}$/.test(pinRaw)) {
-    return new Response(JSON.stringify({ ok: false, error: "PIN must be 3–8 digits" }), {
-      status: 400,
-      headers: { "content-type": "application/json; charset=utf-8" },
-    });
-  }
-
-  // Prevent duplicate PIN within same shop (common expectation)
-  const existing = await env.DB
-    .prepare("SELECT id FROM staff WHERE shop_id = ? AND pin = ? LIMIT 1;")
-    .bind(shop_id, pinRaw)
-    .first();
-
-  if (existing?.id) {
-    return new Response(JSON.stringify({ ok: false, error: "PIN already in use for this shop" }), {
-      status: 409,
-      headers: { "content-type": "application/json; charset=utf-8" },
-    });
-  }
-
-  const now = Date.now();
-
-  // Insert with a tolerant column set (works whether you have created_at or not)
-  // Try with created_at first, fall back if the column doesn't exist.
   try {
+    const { request, env } = ctx;
+
+    const auth = await requireAdmin(request, env);
+    if (auth instanceof Response) return auth;
+
+    let body = null;
+    try { body = await request.json(); } catch (_) {}
+
+    const name = (body?.name || "").trim();
+    const pin = (body?.pin ?? "").toString().trim();
+    const shop = (body?.shop_id || body?.shop || body?.shopId || "").toString().trim();
+
+    if (!name || !pin || !shop) {
+      return new Response(JSON.stringify({ ok:false, error:"Missing name, pin, or shop_id" }), {
+        status: 400,
+        headers: { "content-type":"application/json; charset=utf-8" },
+      });
+    }
+
+    if (!/^[0-9]{3,8}$/.test(pin)) {
+      return new Response(JSON.stringify({ ok:false, error:"PIN must be 3–8 digits" }), {
+        status: 400,
+        headers: { "content-type":"application/json; charset=utf-8" },
+      });
+    }
+
+    const cols = await getCols(env.DB, "staff");
+
+    // map to whatever your schema uses
+    const payload = {
+      name,
+      pin,
+      shop_id: shop,
+      shop: shop,
+      created_at: Date.now(),
+      active: 1,
+    };
+
+    const row = pick(cols, payload);
+    const keys = Object.keys(row);
+
+    if (keys.length < 2) {
+      return new Response(JSON.stringify({ ok:false, error:"staff table columns not compatible", cols:[...cols] }), {
+        status: 500,
+        headers: { "content-type":"application/json; charset=utf-8" },
+      });
+    }
+
+    const placeholders = keys.map(()=>"?").join(",");
+    const values = keys.map(k=>row[k]);
+
     const ins = await env.DB
-      .prepare("INSERT INTO staff (name, pin, shop_id, created_at) VALUES (?, ?, ?, ?);")
-      .bind(name, pinRaw, shop_id, now)
+      .prepare(`INSERT INTO staff (${keys.join(",")}) VALUES (${placeholders});`)
+      .bind(...values)
       .run();
 
-    return new Response(JSON.stringify({ ok: true, id: ins.meta?.last_row_id }), {
-      headers: { "content-type": "application/json; charset=utf-8" },
+    return new Response(JSON.stringify({ ok:true, id: ins.meta?.last_row_id }), {
+      headers: { "content-type":"application/json; charset=utf-8" },
     });
-  } catch (e) {
-    // fallback insert
-    const ins = await env.DB
-      .prepare("INSERT INTO staff (name, pin, shop_id) VALUES (?, ?, ?);")
-      .bind(name, pinRaw, shop_id)
-      .run();
 
-    return new Response(JSON.stringify({ ok: true, id: ins.meta?.last_row_id }), {
-      headers: { "content-type": "application/json; charset=utf-8" },
+  } catch (e) {
+    return new Response(JSON.stringify({ ok:false, error:"Staff add failed", detail:String(e?.message || e) }), {
+      status: 500,
+      headers: { "content-type":"application/json; charset=utf-8" },
     });
   }
 }
