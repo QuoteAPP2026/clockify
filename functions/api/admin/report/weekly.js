@@ -21,9 +21,19 @@ export async function onRequestGet({ request, env }) {
     if (!auth.ok) return json({ ok:false, error:auth.error }, auth.status);
 
     const url = new URL(request.url);
-    const start = url.searchParams.get("start"); // expects YYYY-MM-DD
-    if (!start || !/^\d{4}-\d{2}-\d{2}$/.test(start)) {
-      return json({ ok:false, error:"Missing/invalid start (YYYY-MM-DD)" }, 400);
+    let start = url.searchParams.get("start"); // accepts YYYY-MM-DD or DD/MM/YYYY
+    if (!start) {
+      return json({ ok:false, error:"Missing start date" }, 400);
+    }
+
+    // Convert DD/MM/YYYY -> YYYY-MM-DD if needed
+    if (/^\d{2}\/\d{2}\/\d{4}$/.test(start)) {
+      const [dd, mm, yyyy] = start.split("/");
+      start = `${yyyy}-${mm}-${dd}`;
+    }
+
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(start)) {
+      return json({ ok:false, error:"Invalid start date format (use YYYY-MM-DD or DD/MM/YYYY)" }, 400);
     }
 
     // Window: start 00:00:00 -> +7 days
