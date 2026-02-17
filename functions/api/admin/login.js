@@ -1,39 +1,40 @@
-import { createAdminSession } from "../../_lib/admin.js";
-
-export async function onRequestPost(ctx) {
+export async function onRequestPost({ request, env }) {
   try {
-    const { request, env } = ctx;
-
-    let body = null;
-    try { body = await request.json(); } catch (_) {}
-    const pass = body?.password;
-
-    if (!pass) {
+    const body = await request.json();
+    if (!body?.password) {
       return new Response(JSON.stringify({ ok:false, error:"Missing password" }), {
-        status: 400,
-        headers: { "content-type":"application/json; charset=utf-8" },
+        status:400,
+        headers:{ "content-type":"application/json" }
       });
     }
 
-    if (pass !== env.ADMIN_PASSWORD) {
+    if (body.password !== env.ADMIN_PASSWORD) {
       return new Response(JSON.stringify({ ok:false, error:"Wrong password" }), {
-        status: 401,
-        headers: { "content-type":"application/json; charset=utf-8" },
+        status:401,
+        headers:{ "content-type":"application/json" }
       });
     }
 
-    const { cookie } = await createAdminSession(env);
+    const token = crypto.randomUUID();
+    const now = Date.now();
+    const expires = now + (1000 * 60 * 60 * 24 * 14);
+
+    await env.DB
+      .prepare("INSERT INTO admin_sessions (token, created_at, expires_at) VALUES (?, ?, ?)")
+      .bind(token, now, expires)
+      .run();
 
     return new Response(JSON.stringify({ ok:true }), {
-      headers: {
-        "content-type":"application/json; charset=utf-8",
-        "set-cookie": cookie,
-      },
+      headers:{
+        "content-type":"application/json",
+        "set-cookie": `admin_session=${token}; Path=/; HttpOnly; Secure; SameSite=Lax`
+      }
     });
+
   } catch (e) {
-    return new Response(JSON.stringify({ ok:false, error:"Login failed", detail:String(e?.message || e) }), {
-      status: 500,
-      headers: { "content-type":"application/json; charset=utf-8" },
+    return new Response(JSON.stringify({ ok:false, error:String(e.message) }), {
+      status:500,
+      headers:{ "content-type":"application/json" }
     });
   }
 }

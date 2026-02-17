@@ -1,20 +1,25 @@
-import { destroyAdminSession } from "../../_lib/admin.js";
-
-export async function onRequestPost(ctx) {
+export async function onRequestPost({ request, env }) {
   try {
-    const { request, env } = ctx;
-    const cookie = await destroyAdminSession(request, env);
+    const cookie = request.headers.get("cookie") || "";
+    const match = cookie.match(/admin_session=([^;]+)/);
+    if (match) {
+      await env.DB
+        .prepare("DELETE FROM admin_sessions WHERE token = ?")
+        .bind(match[1])
+        .run();
+    }
 
     return new Response(JSON.stringify({ ok:true }), {
-      headers: {
-        "content-type":"application/json; charset=utf-8",
-        "set-cookie": cookie,
-      },
+      headers:{
+        "content-type":"application/json",
+        "set-cookie":"admin_session=; Path=/; Max-Age=0; HttpOnly; Secure; SameSite=Lax"
+      }
     });
+
   } catch (e) {
-    return new Response(JSON.stringify({ ok:false, error:"Logout failed", detail:String(e?.message || e) }), {
-      status: 500,
-      headers: { "content-type":"application/json; charset=utf-8" },
+    return new Response(JSON.stringify({ ok:false, error:String(e.message) }), {
+      status:500,
+      headers:{ "content-type":"application/json" }
     });
   }
 }
