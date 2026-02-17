@@ -1,0 +1,22 @@
+:root { --bg:#0f1115; --card:#151a22; --muted:#9aa4b2; --txt:#eef2f7; --accent:#3b82f6; --danger:#ef4444; }
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--txt);font-family:system-ui,-apple-system,Segoe UI,Roboto,Arial}
+a{color:var(--accent);text-decoration:none}
+.wrap{max-width:980px;margin:0 auto;padding:20px}
+.card{background:var(--card);border:1px solid rgba(255,255,255,.06);border-radius:14px;padding:18px}
+.row{display:flex;gap:14px;flex-wrap:wrap}
+.row > *{flex:1}
+h1,h2{margin:0 0 12px}
+.small{color:var(--muted);font-size:14px}
+.btn{background:var(--accent);border:none;color:white;padding:12px 14px;border-radius:12px;font-weight:700;cursor:pointer}
+.btn:disabled{opacity:.5;cursor:not-allowed}
+.btn.secondary{background:#2a3344}
+.btn.danger{background:var(--danger)}
+input,select{width:100%;padding:12px;border-radius:12px;border:1px solid rgba(255,255,255,.12);background:#0c0f14;color:var(--txt)}
+table{width:100%;border-collapse:collapse}
+th,td{padding:10px;border-bottom:1px solid rgba(255,255,255,.08);text-align:left;font-size:14px}
+.badge{display:inline-block;padding:4px 8px;border-radius:999px;background:#0c0f14;border:1px solid rgba(255,255,255,.12);color:var(--muted);font-size:12px}
+hr{border:none;border-top:1px solid rgba(255,255,255,.08);margin:16px 0}
+.toast{margin-top:12px;padding:10px 12px;border-radius:12px;background:#0c0f14;border:1px solid rgba(255,255,255,.12);color:var(--muted)}
+.toast.ok{border-color:rgba(34,197,94,.4);color:#bbf7d0}
+.toast.err{border-color:rgba(239,68,68,.5);color:#fecaca}

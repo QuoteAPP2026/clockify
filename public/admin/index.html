@@ -1,0 +1,303 @@
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>Clockify - Admin</title>
+  <link rel="stylesheet" href="/assets/app.css" />
+</head>
+<body>
+  <div class="wrap">
+    <div class="card">
+      <h1>Clockify Admin</h1>
+      <div class="small">Staff, shops, weekly hours, and edits.</div>
+      <hr/>
+
+      <div id="loginBox" class="row">
+        <div class="card" style="flex:1">
+          <h2>Sign in</h2>
+          <input id="pass" type="password" placeholder="Admin password" />
+          <div style="height:10px"></div>
+          <button class="btn" id="loginBtn">Sign in</button>
+          <div class="toast" id="loginToast" style="display:none"></div>
+        </div>
+      </div>
+
+      <div id="appBox" style="display:none">
+        <div class="row">
+          <div class="card">
+            <h2>Shops</h2>
+            <div id="shops"></div>
+          </div>
+          <div class="card">
+            <h2>Add staff</h2>
+            <input id="staffName" placeholder="Name" />
+            <div style="height:10px"></div>
+            <input id="staffPin" placeholder="PIN (4–8 digits)" inputmode="numeric" />
+            <div style="height:10px"></div>
+            <button class="btn" id="addStaffBtn">Add staff</button>
+            <div class="toast" id="addStaffToast" style="display:none"></div>
+          </div>
+        </div>
+
+        <div style="height:14px"></div>
+
+        <div class="card">
+          <div class="row" style="align-items:center">
+            <div>
+              <h2 style="margin:0">Weekly hours</h2>
+              <div class="small" id="weekLabel"></div>
+            </div>
+            <div style="text-align:right">
+              <button class="btn secondary" id="refreshBtn">Refresh</button>
+              <button class="btn danger" id="logoutBtn">Sign out</button>
+            </div>
+          </div>
+          <hr/>
+          <div id="weekly"></div>
+        </div>
+
+        <div style="height:14px"></div>
+
+        <div class="card">
+          <h2>Recent punches (edit)</h2>
+          <div class="small">Edit timestamp using ISO format (we’ll give you a helper button).</div>
+          <hr/>
+          <div id="punches"></div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+<script>
+  const loginBox = document.getElementById('loginBox');
+  const appBox = document.getElementById('appBox');
+
+  function toast(el, msg, ok=true){
+    el.style.display='block';
+    el.className='toast ' + (ok ? 'ok':'err');
+    el.textContent=msg;
+    setTimeout(()=>{ el.style.display='none'; }, 3500);
+  }
+
+  async function api(path, method='GET', body=null){
+    const res = await fetch(path, {
+      method,
+      headers: body ? {'Content-Type':'application/json'} : undefined,
+      body: body ? JSON.stringify(body) : null
+    });
+    const data = await res.json().catch(()=>({ok:false,error:'Bad response'}));
+    if (!res.ok && data && data.error) throw new Error(data.error);
+    if (!data.ok) throw new Error(data.error || 'Error');
+    return data;
+  }
+
+  async function login(){
+    const pass = document.getElementById('pass').value;
+    const t = document.getElementById('loginToast');
+    try {
+      await api('/api/admin/login', 'POST', {password: pass});
+      loginBox.style.display='none';
+      appBox.style.display='block';
+      await loadAll();
+    } catch(e){
+      toast(t, e.message, false);
+    }
+  }
+
+  async function logout(){
+    await api('/api/admin/logout','POST',{});
+    location.reload();
+  }
+
+  async function loadShops(){
+    const box = document.getElementById('shops');
+    const data = await api('/api/admin/shops');
+    box.innerHTML = data.shops.map(s => `
+      <div class="row" style="align-items:center;margin-bottom:10px">
+        <div style="flex:1">
+          <div><b>${s.id.toUpperCase()}</b> <span class="badge">${s.name}</span></div>
+        </div>
+        <div style="flex:2">
+          <input data-shop="${s.id}" placeholder="Rename shop" />
+        </div>
+        <div style="flex:1;text-align:right">
+          <button class="btn secondary" data-save="${s.id}">Save</button>
+        </div>
+      </div>
+    `).join('');
+
+    box.querySelectorAll('button[data-save]').forEach(btn => {
+      btn.onclick = async () => {
+        const id = btn.getAttribute('data-save');
+        const inp = box.querySelector(`input[data-shop="${id}"]`);
+        const name = inp.value.trim();
+        if (!name) return;
+        await api('/api/admin/shops/rename','POST',{id,name});
+        await loadShops();
+      };
+    });
+  }
+
+  async function addStaff(){
+    const name = document.getElementById('staffName').value.trim();
+    const pin = document.getElementById('staffPin').value.trim();
+    const t = document.getElementById('addStaffToast');
+    try {
+      await api('/api/admin/staff/add','POST',{name,pin});
+      document.getElementById('staffName').value='';
+      document.getElementById('staffPin').value='';
+      toast(t,'Staff added',true);
+      await loadWeekly();
+      await loadPunches();
+    } catch(e){
+      toast(t,e.message,false);
+    }
+  }
+
+  function mondayStart(d){
+    const dt = new Date(Date.UTC(d.getUTCFullYear(), d.getUTCMonth(), d.getUTCDate()));
+    const day = dt.getUTCDay();
+    const diff = (day === 0 ? -6 : 1 - day);
+    dt.setUTCDate(dt.getUTCDate() + diff);
+    dt.setUTCHours(0,0,0,0);
+    return dt;
+  }
+
+  async function loadWeekly(){
+    const start = mondayStart(new Date()).toISOString();
+    const data = await api('/api/admin/report/weekly?start=' + encodeURIComponent(start));
+    document.getElementById('weekLabel').textContent = `Week: ${data.start} → ${data.end}`;
+
+    const box = document.getElementById('weekly');
+    if (!data.rows.length) {
+      box.innerHTML = `<div class="small">No punches yet this week.</div>`;
+      return;
+    }
+
+    const totals = data.totalsByShop || {};
+    const totalsLine = `<div class="small">Totals — Shop A: <b>${(totals.a||0).toFixed(2)}</b> hrs, Shop B: <b>${(totals.b||0).toFixed(2)}</b> hrs</div><hr/>`;
+
+    box.innerHTML = totalsLine + `
+      <table>
+        <thead>
+          <tr>
+            <th>Staff</th>
+            <th>Hours</th>
+            <th>Open shift</th>
+          </tr>
+        </thead>
+        <tbody>
+          ${data.rows.map(r => `
+            <tr>
+              <td>${r.staff_name}</td>
+              <td><b>${(r.hours||0).toFixed(2)}</b></td>
+              <td>${r.open_shift ? `<span class="badge">IN @ ${r.open_shift.in} (${r.open_shift.shop.toUpperCase()})</span>` : `<span class="badge">None</span>`}</td>
+            </tr>
+          `).join('')}
+        </tbody>
+      </table>
+      <div style="height:10px"></div>
+      <details>
+        <summary class="small">Show shift breakdown</summary>
+        <div style="height:10px"></div>
+        ${data.rows.map(r => `
+          <div class="card" style="margin-bottom:10px">
+            <b>${r.staff_name}</b> <span class="badge">${(r.hours||0).toFixed(2)} hrs</span>
+            <div style="height:8px"></div>
+            ${(r.details||[]).length ? `
+              <table>
+                <thead><tr><th>In</th><th>Out</th><th>Shop</th><th>Hours</th></tr></thead>
+                <tbody>
+                  ${r.details.map(d=>`
+                    <tr>
+                      <td>${d.in}</td><td>${d.out}</td><td>${d.shop.toUpperCase()}</td><td>${(d.hours||0).toFixed(2)}</td>
+                    </tr>
+                  `).join('')}
+                </tbody>
+              </table>
+            ` : `<div class="small">No completed shifts.</div>`}
+          </div>
+        `).join('')}
+      </details>
+    `;
+  }
+
+  async function loadPunches(){
+    const data = await api('/api/admin/punches?limit=120');
+    const box = document.getElementById('punches');
+    if (!data.punches.length){
+      box.innerHTML = `<div class="small">No punches yet.</div>`;
+      return;
+    }
+
+    box.innerHTML = `
+      <table>
+        <thead>
+          <tr>
+            <th>When</th>
+            <th>Staff</th>
+            <th>Shop</th>
+            <th>Type</th>
+            <th>Edit</th>
+          </tr>
+        </thead>
+        <tbody>
+          ${data.punches.map(p=>`
+            <tr>
+              <td>${p.ts} ${p.edited ? `<span class="badge">edited</span>`:''}</td>
+              <td>${p.staff_name}</td>
+              <td>${p.shop_id.toUpperCase()}</td>
+              <td><b>${p.type}</b></td>
+              <td>
+                <button class="btn secondary" data-edit="${p.id}">Edit</button>
+              </td>
+            </tr>
+          `).join('')}
+        </tbody>
+      </table>
+      <div style="height:10px"></div>
+      <div class="small">Edit uses ISO time (UTC). Example: <span class="badge">2026-02-17T10:30:00.000Z</span></div>
+    `;
+
+    box.querySelectorAll('button[data-edit]').forEach(btn=>{
+      btn.onclick = async ()=>{
+        const id = Number(btn.getAttribute('data-edit'));
+        const ts = prompt("New timestamp (ISO):");
+        if (!ts) return;
+        const note = prompt("Optional note (why changed):") || "";
+        try{
+          await api('/api/admin/punches/edit','POST',{id,ts,note});
+          await loadWeekly();
+          await loadPunches();
+        }catch(e){
+          alert(e.message);
+        }
+      };
+    });
+  }
+
+  async function loadAll(){
+    await loadShops();
+    await loadWeekly();
+    await loadPunches();
+  }
+
+  document.getElementById('loginBtn').onclick = login;
+  document.getElementById('addStaffBtn').onclick = addStaff;
+  document.getElementById('refreshBtn').onclick = loadAll;
+  document.getElementById('logoutBtn').onclick = logout;
+
+  // If already logged in (cookie), try to load
+  (async ()=>{
+    try{
+      await loadAll();
+      loginBox.style.display='none';
+      appBox.style.display='block';
+    }catch(e){
+      // stay on login
+    }
+  })();
+</script>
+</body>
+</html>

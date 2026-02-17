@@ -1,0 +1,89 @@
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>Clockify - Shop</title>
+  <link rel="stylesheet" href="/assets/app.css" />
+  <style>
+    .center{display:flex;align-items:center;justify-content:center;min-height:100vh;padding:20px}
+    .pad{max-width:520px;width:100%}
+    .pin{font-size:34px;letter-spacing:10px;text-align:center}
+    .grid{display:grid;grid-template-columns:repeat(3,1fr);gap:12px;margin-top:14px}
+    .key{padding:18px;border-radius:14px;background:#0c0f14;border:1px solid rgba(255,255,255,.12);color:var(--txt);font-size:22px;font-weight:800;cursor:pointer}
+    .actions{display:flex;gap:12px;margin-top:14px}
+    .actions .btn{flex:1;font-size:18px;padding:16px}
+  </style>
+</head>
+<body>
+  <div class="center">
+    <div class="pad card">
+      <h1>Clockify</h1>
+      <div class="small" id="shopLabel">Shop</div>
+      <hr/>
+      <input class="pin" id="pin" inputmode="numeric" autocomplete="one-time-code" placeholder="••••" readonly />
+      <div class="grid" id="keys"></div>
+      <div class="actions">
+        <button class="btn" id="btnIn">Clock In</button>
+        <button class="btn secondary" id="btnOut">Clock Out</button>
+      </div>
+      <div class="toast" id="toast" style="display:none"></div>
+      <hr/>
+      <div class="small">Tip: pin this page to the tablet home screen.</div>
+    </div>
+  </div>
+
+<script>
+  const qs = new URLSearchParams(location.search);
+  const shop = qs.get('shop') || 'a';
+  const shopName = shop === 'b' ? 'Shop B' : 'Shop A';
+  document.getElementById('shopLabel').textContent = shopName + " (PIN entry)";
+
+  const pinEl = document.getElementById('pin');
+  const toastEl = document.getElementById('toast');
+
+  const keys = ['1','2','3','4','5','6','7','8','9','CLR','0','DEL'];
+  const keysWrap = document.getElementById('keys');
+  keys.forEach(k => {
+    const b = document.createElement('button');
+    b.className = 'key';
+    b.textContent = k;
+    b.onclick = () => {
+      let v = pinEl.value.replace(/\\D/g,'');
+      if (k === 'CLR') v = '';
+      else if (k === 'DEL') v = v.slice(0,-1);
+      else if (v.length < 8) v += k;
+      pinEl.value = v;
+    };
+    keysWrap.appendChild(b);
+  });
+
+  function toast(msg, ok=true){
+    toastEl.style.display = 'block';
+    toastEl.className = 'toast ' + (ok ? 'ok' : 'err');
+    toastEl.textContent = msg;
+    setTimeout(()=>{ toastEl.style.display='none'; }, 3500);
+  }
+
+  async function punch(action){
+    const pin = pinEl.value.replace(/\\D/g,'');
+    if (!pin) return toast("Enter your PIN first", false);
+
+    const res = await fetch('/api/punch', {
+      method:'POST',
+      headers:{'Content-Type':'application/json'},
+      body: JSON.stringify({ pin, action, shop })
+    });
+
+    const data = await res.json().catch(()=>({ok:false,error:'Bad response'}));
+    if (!data.ok) return toast(data.error || 'Error', false);
+
+    pinEl.value = '';
+    toast(`${data.staff}: clock ${action === 'IN' ? 'in' : 'out'} recorded`, true);
+  }
+
+  document.getElementById('btnIn').onclick = () => punch('IN');
+  document.getElementById('btnOut').onclick = () => punch('OUT');
+</script>
+</body>
+</html>

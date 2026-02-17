@@ -1,0 +1,8 @@
+{
+  "name": "clockify",
+  "private": true,
+  "type": "module",
+  "dependencies": {
+    "hono": "^4.5.0"
+  }
+}

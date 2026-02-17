@@ -1,19 +1,32 @@
-<!DOCTYPE html>
+<!doctype html>
 <html>
 <head>
-  <meta charset="UTF-8" />
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
   <title>Clockify</title>
-  <style>
-    body {
-      font-family: Arial, sans-serif;
-      text-align: center;
-      margin-top: 100px;
-      background: #111;
-      color: white;
-    }
-  </style>
+  <link rel="stylesheet" href="/assets/app.css" />
 </head>
 <body>
-  <h1>Clockify is live</h1>
+  <div class="wrap">
+    <div class="card">
+      <h1>Clockify</h1>
+      <div class="small">Use the shop links on tablets. Use admin for staff and reports.</div>
+      <hr/>
+      <div class="row">
+        <div class="card">
+          <h2>Shop A tablet</h2>
+          <a class="btn" href="/shop/?shop=a">Open Shop A</a>
+        </div>
+        <div class="card">
+          <h2>Shop B tablet</h2>
+          <a class="btn" href="/shop/?shop=b">Open Shop B</a>
+        </div>
+        <div class="card">
+          <h2>Admin</h2>
+          <a class="btn secondary" href="/admin/">Open Admin</a>
+        </div>
+      </div>
+    </div>
+  </div>
 </body>
 </html>
